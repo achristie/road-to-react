@@ -3,8 +3,9 @@ import "./App.css";
 import React, { useEffect } from "react";
 import { useReducer } from "react";
 import { useCallback } from "react";
-import { ReactComponent as Check } from "./check.svg";
-import { useMemo } from "react";
+import { SearchForm } from "./components/SearchForm";
+import { Stories } from "./components/Stories";
+import { Toolbar } from "./components/Toolbar";
 
 const API_ENDPOINT = "https://hn.algolia.com/api/v1/search?query=";
 
@@ -17,7 +18,8 @@ function App() {
     isError: false,
   });
 
-  const handleSubmit = () => {
+  const handleSubmit = (e) => {
+    e.preventDefault();
     setUrl(`${API_ENDPOINT}${searchTerm}`);
   };
 
@@ -53,7 +55,12 @@ function App() {
     });
   }, []);
 
-  console.log("app");
+  const handleSort = useCallback((type) => {
+    dispatchStories({
+      type: "SORT_TITLE",
+    });
+  }, []);
+
   return (
     <div className="App">
       <SearchForm
@@ -61,6 +68,7 @@ function App() {
         handleSubmit={handleSubmit}
         handleChange={handleChange}
       />
+      <Toolbar handleClick={handleSort} />
       {stories.isLoading ? (
         <h1>Loading!</h1>
       ) : (
@@ -72,44 +80,15 @@ function App() {
 
 export default App;
 
-const SearchForm = ({ searchTerm, handleSubmit, handleChange }) => {
-  return (
-    <form onSubmit={handleSubmit}>
-      <input type="text" value={searchTerm} onChange={handleChange} />
-      <button disabled={!searchTerm} type="submit">
-        Fetch
-      </button>
-      <Check height="18px" width="18px" fill="green" stroke="green" />
-    </form>
-  );
-};
-
 const useStorageState = (key, initialState) => {
   const [value, setValue] = useState(localStorage.getItem(key) || initialState);
 
   useEffect(() => {
-    console.log("str state");
     localStorage.setItem(key, value);
   }, [value]);
 
   return [value, setValue];
 };
-
-const Stories = React.memo(
-  ({ list, handleRemove }) =>
-    console.log("list") || (
-      <ul>
-        {list.map((item) => (
-          <li key={item.objectID}>
-            {item.title}
-            <button type="button" onClick={() => handleRemove(item)}>
-              Remove
-            </button>
-          </li>
-        ))}
-      </ul>
-    )
-);
 
 const storiesReducer = (state, action) => {
   switch (action.type) {
@@ -128,10 +107,19 @@ const storiesReducer = (state, action) => {
     case "REMOVE_STORY":
       return {
         ...state,
-        data: state.data.filter((story) => action.payload.name !== story.name),
+        data: state.data.filter(
+          (story) => action.payload.objectID !== story.objectID
+        ),
+      };
+    case "SORT_TITLE":
+      return {
+        ...state,
+        data: state.data.sort((a, b) => (a.title > b.title ? 1 : -1)),
       };
 
     default:
       throw new Error();
   }
 };
+
+export { storiesReducer, SearchForm, Stories };
