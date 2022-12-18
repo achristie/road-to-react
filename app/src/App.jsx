@@ -6,21 +6,36 @@ import { useCallback } from "react";
 import { SearchForm } from "./components/SearchForm";
 import { Stories } from "./components/Stories";
 import { Toolbar } from "./components/Toolbar";
+import { History } from "./components/History";
+const API_BASE = "https://hn.algolia.com/api/v1";
+const API_SEARCH = "/search/";
+const PARAM_SEARCH = "query=";
+const PARAM_PAGE = "page=";
 
 const API_ENDPOINT = "https://hn.algolia.com/api/v1/search?query=";
 
+const getUrl = (searchTerm, page) =>
+  `${API_BASE}${API_SEARCH}?${PARAM_SEARCH}${searchTerm}&${PARAM_PAGE}${page}`;
+
 function App() {
   const [searchTerm, setSearchTerm] = useStorageState("search", "AWC2");
-  const [url, setUrl] = useState(`${API_ENDPOINT}${searchTerm}`);
+  const [urls, setUrls] = useState([getUrl(searchTerm, 0)]);
   const [stories, dispatchStories] = useReducer(storiesReducer, {
     data: [],
+    page: 0,
     isLoading: false,
     isError: false,
   });
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    setUrl(`${API_ENDPOINT}${searchTerm}`);
+    handleSearch(searchTerm, 0);
+    // setUrls(`${API_ENDPOINT}${searchTerm}`);
+  };
+
+  const handleSearch = (searchTerm, page) => {
+    const url = getUrl(searchTerm, page);
+    setUrls(urls.concat(url));
   };
 
   const handleChange = (e) => {
@@ -33,16 +48,20 @@ function App() {
     dispatchStories({ type: "STORIES_FETCH_INIT" });
 
     try {
-      const result = await fetch(url).then((res) => res.json());
+      const lastUrl = urls[urls.length - 1];
+      const result = await fetch(lastUrl).then((res) => res.json());
 
       dispatchStories({
         type: "STORIES_FETCH_SUCCESS",
-        payload: result.hits,
+        payload: {
+          list: result.hits,
+          page: result.page,
+        },
       });
     } catch {
       dispatchStories({ type: "STORIES_FETCH_FAILURE" });
     }
-  }, [url]);
+  }, [urls]);
 
   useEffect(() => {
     handleFetchStories();
@@ -61,6 +80,8 @@ function App() {
     });
   }, []);
 
+  const fetchMore = () => {};
+
   return (
     <div className="App">
       <SearchForm
@@ -69,10 +90,16 @@ function App() {
         handleChange={handleChange}
       />
       <Toolbar handleClick={handleSort} />
+      <History items={urls} />
+      <Stories list={stories.data} handleRemove={handleRemoveStory} />
       {stories.isLoading ? (
         <h1>Loading!</h1>
       ) : (
-        <Stories list={stories.data} handleRemove={handleRemoveStory} />
+        <>
+          <button onClick={() => handleSearch(searchTerm, stories.page + 1)}>
+            More
+          </button>
+        </>
       )}
     </div>
   );
@@ -100,7 +127,11 @@ const storiesReducer = (state, action) => {
       };
     case "STORIES_FETCH_SUCCESS":
       return {
-        data: action.payload,
+        data:
+          action.payload.page === 0
+            ? action.payload.list
+            : state.data.concat(action.payload.list),
+        page: action.payload.page,
         isLoading: false,
         isError: false,
       };
